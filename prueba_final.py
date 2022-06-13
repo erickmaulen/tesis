@@ -10,20 +10,18 @@ import argparse
 import imutils
 import cv2
 from math import dist
+from sewar.full_ref import mse, rmse, psnr, uqi, ssim, ergas, scc, rase, sam, msssim, vifp
 
 
-
-
-def mse(imageA, imageB):
-    	# the 'Mean Squared Error' between the two images is the
-	# sum of the squared difference between the two images;
-	# NOTE: the two images must have the same dimension
-	err = np.sum((imageA.astype("float") - imageB.astype("float")) ** 2)
-	err /= float( np.mat(imageA.shape[0]) * np.mat(imageA.shape[1])) 
-	
-	# return the MSE, the lower the error, the more "similar"
-	# the two images are
-	return err
+# def mse (imageA,imageB):
+#   shapes = (10,10)
+#   if shapes == imageA.shape and shapes == imageB.shape:   
+#     err = np.sum((imageA.astype("float") - imageB.astype("float")) ** 2)
+#     err /= float(np.mat(imageA.shape[0]) * np.mat(imageA.shape[1]))
+#     print("hola")
+#     return err
+#   else:
+#         return 101
 
 # Aca se setean los parametros del detector de Blobs
 params = cv2.SimpleBlobDetector_Params()
@@ -51,7 +49,7 @@ params.minInertiaRatio = 0.087
 # Se crea el detector con los parametros
 detector = cv2.SimpleBlobDetector_create(params)
 
-env = gym.make('MsPacman-v0')
+env = gym.make('ALE/MsPacman-v5',full_action_space=False)
 images = []
 done = False
 step = 0
@@ -59,6 +57,7 @@ step = 0
 env.reset()
 while not done and step < 10:
     action = env.action_space.sample()
+    print(env.action_space)
     state_next, reward, done, info = env.step(action)
     image = state_next
     cv2.waitKey(0)
@@ -148,9 +147,20 @@ while(ret):
  
     centers = []
     lastPosition = []
+    objetos = []
+    flag = True
     dicObjects = {
       "Objetos" : posiblesObjects,
       "Posiciones" :lastPosition
+    }
+
+
+    actions = list()
+    move = list()
+
+    dictionaryAction = {
+      "Accion" : action,
+      "Move" : move
     }
     r = 5
     #Ciclo para dibujar los circulos en cada objeto
@@ -163,36 +173,64 @@ while(ret):
       cv2.imshow('dfa',dframe)
       
     #Ciclo de la magia
-    for i in range(0,len(centers)):
-      print("iteracion ",i)
-      print("cantidad de objetos en este frame",len(centers))
-      
-      #print(len(contornos))    
+    for i in range(0,len(centers)):        
       x = centers[i][0]
       y = centers[i][1]
       rectX = (x - r) 
       rectY = (y - r)
       if(rectX < 0):
           rectX = 0
-      #Posicion de un objeto
-      position = x,y
       #Oldobject es un objeto , lo que hace es cortar segun el 
       #centro estimado del objeto y esa matriz asignarla a una variable
-      OldObject = dframe[rectY:(y+r),rectX:(x+r)]
-      posiblesObjects.append(OldObject)
+      objeto = dframe[rectY:(y+r),rectX:(x+r)]
       #Cuando captura un posible objeto pero un
       #un frame ya no esta, este if evita ese problema
-      if OldObject.size == 0:
+      if objeto.size == 0:
         continue
       else:
-      #Aca es donde se deberia hacer el diccionario de objetos
-      #Esta flag era para que solo entrase la primera iteracion xd
-        if flag:
-          np.append(posiblesObjects[i],OldObject)
-          #posiblesObjects[i].append(OldObject)
-          lastPosition.append(position)
-          
-      
+        #Posicion de un objeto
+        position = x,y
+        if len(objetos) == 0:
+            # flag = False
+            objetos.append(list())
+            objetos[i].append(objeto)
+
+            lastPosition.append(list())
+            lastPosition[i].append(position)
+        else:
+              if len(objetos) == i:
+                    objetos.append(list())
+                    objetos[i].append(objeto)
+
+                    lastPosition.append(list())
+                    lastPosition[i].append(position)
+
+              else:      
+                for j in range(len(objetos)):
+                      positionRelative = lastPosition[i][-1] 
+                      if dist(positionRelative, position) == 1 and mse():
+                            if isinstance(objetos[j], list) or isinstance(objetos[j], np.ndarray):
+                              objetos[i].append(objeto)
+                              lastPosition[i].append(position)
+                              if (positionRelative[0] > position[0]):
+                                    move.append(3)
+                              break
+                            else:
+                                  objetos.append(list())
+                                  objetos[i].append(objeto)
+                                  lastPosition.append(list())
+                                  lastPosition[i].append(position)
+
+                      objetos.append(list())
+                      objetos[i].append(objeto)
+
+                      lastPosition.append(list())
+                      lastPosition[i].append(position)
+            
+                              
+       
+                          
+                                       
     flag = False    
     videoblob.write(im_with_keypoints)
     
@@ -207,6 +245,7 @@ while(ret):
   # Mostrar frame que ocupo el metodo de cv2 para la deteccion de objetos 
   #cv2.imshow('frame', frame)
   cv2.waitKey(20)
+
 
 video.release()  
 cap.release()
