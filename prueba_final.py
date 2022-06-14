@@ -55,14 +55,16 @@ done = False
 step = 0
 
 env.reset()
+accionesAgent = list()
 while not done and step < 10:
     action = env.action_space.sample()
-    print(env.action_space)
+    accionesAgent.append(action)
     state_next, reward, done, info = env.step(action)
     image = state_next
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     images.append(image)
+
 
 #Aca se obtiene el alto y ancho debido a que se debera recortar la imagen final
 height, width = state_next.shape[0:2]
@@ -82,13 +84,14 @@ video.release()
 cap = cv2.VideoCapture("Ms-Pacman-v0.wmv")
 
 # Seleccion random de 25 frames
-frameIds = cap.get(cv2.CAP_PROP_FRAME_COUNT) * np.random.uniform(size=12)
+frameIds = cap.get(cv2.CAP_PROP_FRAME_COUNT) * np.random.uniform(size=25)
 
 frames = []
 for fid in frameIds:
     cap.set(cv2.CAP_PROP_POS_FRAMES, fid)
     ret, frame = cap.read()
     frames.append(frame)
+
 
 # Calcular la mediana a lo largo del eje temporal
 medianFrame = np.median(frames, axis=0).astype(dtype=np.uint8)
@@ -159,7 +162,7 @@ while(ret):
     move = list()
 
     dictionaryAction = {
-      "Accion" : action,
+      "Accion" : accionesAgent,
       "Move" : move
     }
     r = 5
@@ -208,18 +211,33 @@ while(ret):
               else:      
                 for j in range(len(objetos)):
                       positionRelative = lastPosition[i][-1] 
-                      if dist(positionRelative, position) == 1 and mse():
+                      if dist(positionRelative, position) == 1 :
                             if isinstance(objetos[j], list) or isinstance(objetos[j], np.ndarray):
                               objetos[i].append(objeto)
                               lastPosition[i].append(position)
                               if (positionRelative[0] > position[0]):
                                     move.append(3)
+                              elif (positionRelative[0] < position[0]):
+                                    move.append(2)
+                              elif (positionRelative[1] > position[1]):
+                                    move.append(4)
+                              elif (positionRelative[1] < position[1]):
+                                    move.append(1)
                               break
                             else:
                                   objetos.append(list())
                                   objetos[i].append(objeto)
                                   lastPosition.append(list())
                                   lastPosition[i].append(position)
+                                  if (positionRelative[0] > position[0]):
+                                        move.append(3)
+                                  elif (positionRelative[0] < position[0]):
+                                        move.append(2)
+                                  elif (positionRelative[1] > position[1]):
+                                        move.append(4)
+                                  elif (positionRelative[1] < position[1]):
+                                        move.append(1)
+                                  break
 
                       objetos.append(list())
                       objetos[i].append(objeto)
