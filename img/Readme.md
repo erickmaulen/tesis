@@ -1,1 +1,0 @@
-#Estas imagenes son de prueba para la deteccion de Blobs.

@@ -11,6 +11,7 @@ import imutils
 import cv2
 from math import dist
 from sewar.full_ref import mse, rmse, psnr, uqi, ssim, ergas, scc, rase, sam, msssim, vifp
+from scipy.stats.stats import pearsonr
 
 
 
@@ -44,12 +45,20 @@ env = gym.make('ALE/MsPacman-v5',full_action_space=False)
 images = []
 done = False
 step = 0
-
+posiblesActions = [1,2,3,4]
 env.reset()
 accionesAgent = list()
 while not done and step < 10:
       action = env.action_space.sample()
-      accionesAgent.append(action)
+      if action in posiblesActions:
+            if len(accionesAgent) == 0:
+                  accionesAgent.append(action)
+            else :
+                  if action == accionesAgent[-1]:
+                        continue
+                  else:
+                        accionesAgent.append(action)
+                  
       state_next, reward, done, info = env.step(action)
       image = state_next
       cv2.waitKey(0)
@@ -98,12 +107,12 @@ object_detector = cv2.createBackgroundSubtractorMOG2()
 k = 0
 flag = True
 posiblesObjects = []
-lastPosition = []
+lastPosition = list()
 objetos = list()
 actions = list()
 move = list()
 dicObjects = {
-      "Objetos" : posiblesObjects,
+      "Objetos" : objetos,
       "Posiciones" :lastPosition
 }
 dictionaryAction = {
@@ -159,7 +168,7 @@ while(ret):
                   dframe = cv2.circle(dframe,center,9,(255,0,0),0)
                   cv2.imshow('dfa',dframe)
             #Ciclo de la magia
-            for i in range(0,len(centers)):      
+            for i in range(0,len(centers)):   
                   x = centers[i][0]
                   y = centers[i][1]
                   rectX = (x - r) 
@@ -174,6 +183,7 @@ while(ret):
                   if objeto.size == 0:
                         continue
                   else:
+                        cv2.imwrite('img/objetos'+str(x)+'_'+str(y)+'.png', objeto) # Guardar la imagen de los objetos 
                   #Posicion de un objeto
                         position = x,y
                         if len(objetos) == 0:
@@ -182,7 +192,7 @@ while(ret):
                               lastPosition.append(list())
                               lastPosition[i].append(position)
                         else:
-                              if len(objetos) == i:
+                              if len(objetos) == i :
                                     objetos.append(list())
                                     objetos[i].append(objeto)
                                     lastPosition.append(list())
@@ -191,11 +201,15 @@ while(ret):
                               else:
                                     for j in range(len(objetos)):
                                           positionRelative = lastPosition[i][-1] 
-                                          if dist(positionRelative, position) == 1 :
-                                                if isinstance(objetos[i], list) or isinstance(objetos[i], np.ndarray):
+                                          objetAArray = np.array(objetos[i][0])
+                                          objetBArray = np.array(objeto)
+                                          #Se compara el objeto con el objeto anterior
+                                          # or mse(objetAArray,objetBArray) < 1500
+                                          if dist(positionRelative, position) == 1: 
+                                                if isinstance(objetos[i], list):
                                                       objetos[i].append(objeto)
                                                       lastPosition[i].append(position)
-                                                      if isinstance(move[i], list) or isinstance(move[i], np.ndarray):
+                                                      if isinstance(move[i], list):
                                                             if (positionRelative[0] > position[0]):
                                                                   move[i].append(3)
                                                             elif (positionRelative[0] < position[0]):
@@ -242,12 +256,20 @@ while(ret):
             videoblob.release()
             break
       # Mostrar frame que ocupo el metodo de cv2 para la deteccion de objetos 
-      #cv2.imshow('frame', frame)
-      cv2.waitKey(20)
-print(dictionaryAction)
+      cv2.waitKey(10)
+
+#Encontrar la correlacion de las acciones de los diferentes objetos
+#con las acciones cometidas por el agente
+for i in range(0,len(dictionaryAction['Move'])):
+      corr = dictionaryAction['Move'][i]
+      if len(corr) == 0:
+            continue
+      nueva = accionesAgent[0:len(corr)]
+      #npCorr =np.corrcoef(corr, nueva)[0,1]
+      correlacion = pearsonr(corr, nueva)
+      print(correlacion)
+
 video.release()  
 cap.release()
 cv2.destroyAllWindows()
-
-
 #Por ultimo se puede observar que hay dos videos, uno de lo que jugo la IA y otro de lo que se detecto a partir de los Blobs.
