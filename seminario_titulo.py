@@ -167,7 +167,7 @@ while(ret):
                   radius = int(r)
                   dframe = cv2.circle(dframe,center,9,(255,0,0),0)
                   cv2.imshow('dfa',dframe)
-            #Ciclo de la magia
+            #Ciclo de la magia, itera por cada objeto en el frame
             for i in range(0,len(centers)):   
                   x = centers[i][0]
                   y = centers[i][1]
@@ -186,12 +186,17 @@ while(ret):
                         cv2.imwrite('img/objetos'+str(x)+'_'+str(y)+'.png', objeto) # Guardar la imagen de los objetos 
                   #Posicion de un objeto
                         position = x,y
+                        #En una primera instancia el largo del array es 0
+                        #Entonces agrega de inmediato el obejtos y su posicion
                         if len(objetos) == 0:
                               objetos.append(list())
                               objetos[i].append(objeto)
                               lastPosition.append(list())
                               lastPosition[i].append(position)
                         else:
+                              #En caso contrario primero se pregunta si el largo del array de objetos 
+                              #Es igual a i, esto debido a que si se cumple, es porque se encontro un objeto nuevo
+                              #Por lo tanto se agrega el objeto y su posicion
                               if len(objetos) == i :
                                     objetos.append(list())
                                     objetos[i].append(objeto)
@@ -199,16 +204,22 @@ while(ret):
                                     lastPosition[i].append(position)
                                     move.append(list())
                               else:
+                                    #En caso de que difiera el largo, se debe recorrer el array con los diferentes objetos
+                                    #Con el fin de encontrar si el objeto actual ya se encuentra en el array
                                     for j in range(len(objetos)):
                                           positionRelative = lastPosition[i][-1] 
                                           objetAArray = np.array(objetos[i][0])
                                           objetBArray = np.array(objeto)
-                                          #Se compara el objeto con el objeto anterior
-                                          # or mse(objetAArray,objetBArray) < 1500
+                                          #Se calcula la distancia entre el nuevo objeto y cada ultima posicion 
+                                          #de los diferentes obejtos, en caso de ser 1 es el mismo objeto, solo
+                                          #que se movio un pixel
                                           if dist(positionRelative, position) == 1: 
+                                                #Preguntamos si existe una instancia de lista para agregar los objetos
                                                 if isinstance(objetos[i], list):
                                                       objetos[i].append(objeto)
                                                       lastPosition[i].append(position)
+                                                      #Preguntamos si el arreglo move, el que guardara todos los cambios de
+                                                      #movimiento del objeto tiene una instancia de lista para agregar el movimiento.
                                                       if isinstance(move[i], list):
                                                             if (positionRelative[0] > position[0]):
                                                                   move[i].append(3)
@@ -265,7 +276,6 @@ for i in range(0,len(dictionaryAction['Move'])):
       if len(corr) == 0:
             continue
       nueva = accionesAgent[0:len(corr)]
-      #npCorr =np.corrcoef(corr, nueva)[0,1]
       correlacion = pearsonr(corr, nueva)
       print(correlacion)
 
