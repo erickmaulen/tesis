@@ -12,274 +12,41 @@ import cv2
 from math import dist
 from sewar.full_ref import mse, rmse, psnr, uqi, ssim, ergas, scc, rase, sam, msssim, vifp
 from scipy.stats.stats import pearsonr
+from addObjetos import AddObjects
+from backgroundSubtraccion import BackgroundSubtraction
+from calculateMediaFrame import CalculateMediaFrame
+from correlacion import Correlacion
+from diccionarios import Diccionarios
+from drawContornos import DrawContornos
+from framesIteration import FramesIteration
+from move import Move
+import paramsSimpleBlobDetector as p
+from similitud import Similitud
+import trainVideoRecord as t
 
-
-
-# Aca se setean los parametros del detector de Blobs
-params = cv2.SimpleBlobDetector_Params()
-
-# Cambiar thresholds
-params.minThreshold = 10
-params.maxThreshold = 200
-
-# Filtrar por Area
-params.filterByArea = True
-params.minArea = 0.5
-
-# Filtrar por circularidad
-params.filterByCircularity = True
-params.minCircularity = 0.7
-
-# Filtrar por convexidad
-params.filterByConvexity = True
-params.minConvexity = 0.5
-
-# Filtrar por relacion de inercia
-params.filterByInertia = True
-params.minInertiaRatio = 0.087
-
+# Setear parametros del detector de Blobs
+params = p.SimpleBlobDetectorParams()
 # Se crea el detector con los parametros
 detector = cv2.SimpleBlobDetector_create(params)
-
-env = gym.make('ALE/MsPacman-v5',full_action_space=False)
-images = []
-done = False
-step = 0
-posiblesActions = [1,2,3,4]
-env.reset()
-accionesAgent = list()
-while not done and step < 10:
-      action = env.action_space.sample()
-      if action in posiblesActions:
-            if len(accionesAgent) == 0:
-                  accionesAgent.append(action)
-            else :
-                  if action == accionesAgent[-1]:
-                        continue
-                  else:
-                        accionesAgent.append(action)
-                  
-      state_next, reward, done, info = env.step(action)
-      image = state_next
-      cv2.waitKey(0)
-      cv2.destroyAllWindows()
-      images.append(image)
-
-#Aca se obtiene el alto y ancho debido a que se debera recortar la imagen final
-height, width = state_next.shape[0:2]
-video = cv2.VideoWriter('Ms-Pacman-v0.wmv',cv2.VideoWriter_fourcc(*'mp4v'),25,(width,height-40))
-
-#La idea de este video es que muestre como hace tracking a los diferentes objetos que tiene el juego Pacman
-videoblob = cv2.VideoWriter('Ms-Pacman-v0Blob.wmv',cv2.VideoWriter_fourcc(*'mp4v'),25,(width,height-40))
-
-for i in range(len(images)):
-      #print(len(images))
-      video.write(images[i][0:height-40,0:width])
-
-video.release()   
-
-
-# Se abre el video
-cap = cv2.VideoCapture("Ms-Pacman-v0.wmv")
-
-# Seleccion random de 25 frames
-frameIds = cap.get(cv2.CAP_PROP_FRAME_COUNT) * np.random.uniform(size=25)
-
-frames = []
-for fid in frameIds:
-      cap.set(cv2.CAP_PROP_POS_FRAMES, fid)
-      ret, frame = cap.read()
-      frames.append(frame)
-
-
-# Calcular la mediana a lo largo del eje temporal
-medianFrame = np.median(frames, axis=0).astype(dtype=np.uint8)
-cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-
-# Convertir el fondo en escala de grises
-grayMedianFrame = cv2.cvtColor(medianFrame, cv2.COLOR_BGR2GRAY)
-
+accionesAgent,videoblob = t.trainVideoRecord()
+grayMedianFrame,cap = CalculateMediaFrame()
 blobs = []
 ret = True
-
 #Con esto se quiere comparar la extracion de fondo mediante este metodo y el manual
 object_detector = cv2.createBackgroundSubtractorMOG2()
-k = 0
-flag = True
-posiblesObjects = []
-lastPosition = list()
-objetos = list()
-actions = list()
-move = list()
-dicObjects = {
-      "Objetos" : objetos,
-      "Posiciones" :lastPosition
-}
-dictionaryAction = {
-      "Accion" : accionesAgent,
-      "Move" : move
-}
+dictionaryAction,dicObjects,flag,objetos,lastPosition,move = Diccionarios(accionesAgent)
 
 while(ret):
-      #Aca solo ocupo el k para ver en que frame me encuentro
-      k+=1
-      # print(k)
-
-      # Leer el frame
-      ret, frame = cap.read()
-      if not ret:
+      im_with_keypoints,keypoints,mask,frame,dframe,flag = BackgroundSubtraction(cap,grayMedianFrame,object_detector,detector)
+      if not flag:
             print("GAMEOVER")
             break
-      # Convertir el actual frame en escala de grises
-      frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-      # Se calcula la diferencia entre el frame actual y la media(fondo)
-      dframe = cv2.absdiff(frame, grayMedianFrame)
-      # Treshold a binario
-      th, dframe = cv2.threshold(dframe, 30, 255, cv2.THRESH_BINARY)
-      #Deteccion de objetos
-      mask = object_detector.apply(dframe)
-      _, mask = cv2.threshold(mask,254,255, cv2.THRESH_BINARY)
-      #contours, _ = cv2.findContours(mask,cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-      blob = mask
-      blobs.append(blob)
-      #Detectar los posibles Blobs (agrupacion de pixeles con similitudes)
-      keypoints = detector.detect(mask)
-      #Se detectan los blobs con circulos rojos 
-      im_with_keypoints = cv2.drawKeypoints(mask, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-      #Si hay frame
-
-      if ret == True:
-            gauss = cv2.GaussianBlur(mask, (5,5), 0)
-            canny = cv2.Canny(gauss, 50, 150)
-            (contornos,_) = cv2.findContours(canny.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(frame,contornos,-1,(0,0,255), 2)   
-            for key in keypoints:
-                  x = key.pt[0]
-                  y = key.pt[1]
-            centers = []
-            r = 5
-            #Ciclo para dibujar los circulos en cada objeto
-            for i in range(0,len(contornos)):
-                  (rx, ry), radio = cv2.minEnclosingCircle(contornos[i])
-                  center = (int(rx),int(ry))
-                  centers.append(center)
-                  radius = int(r)
-                  dframe = cv2.circle(dframe,center,9,(255,0,0),0)
-                  cv2.imshow('dfa',dframe)
-            #Ciclo de la magia, itera por cada objeto en el frame
-            for i in range(0,len(centers)):   
-                  x = centers[i][0]
-                  y = centers[i][1]
-                  rectX = (x - r) 
-                  rectY = (y - r)
-                  if(rectX < 0):
-                        rectX = 0
-                  #Oldobject es un objeto , lo que hace es cortar segun el 
-                  #centro estimado del objeto y esa matriz asignarla a una variable
-                  objeto = dframe[rectY:(y+r),rectX:(x+r)]
-                  #Cuando captura un posible objeto pero un
-                  #un frame ya no esta, este if evita ese problema
-                  if objeto.size == 0:
-                        continue
-                  else:
-                        cv2.imwrite('img/objetos'+str(x)+'_'+str(y)+'.png', objeto) # Guardar la imagen de los objetos 
-                  #Posicion de un objeto
-                        position = x,y
-                        #En una primera instancia el largo del array es 0
-                        #Entonces agrega de inmediato el obejtos y su posicion
-                        if len(objetos) == 0:
-                              objetos.append(list())
-                              objetos[i].append(objeto)
-                              lastPosition.append(list())
-                              lastPosition[i].append(position)
-                        else:
-                              #En caso contrario primero se pregunta si el largo del array de objetos 
-                              #Es igual a i, esto debido a que si se cumple, es porque se encontro un objeto nuevo
-                              #Por lo tanto se agrega el objeto y su posicion
-                              if len(objetos) == i :
-                                    objetos.append(list())
-                                    objetos[i].append(objeto)
-                                    lastPosition.append(list())
-                                    lastPosition[i].append(position)
-                                    move.append(list())
-                              else:
-                                    #En caso de que difiera el largo, se debe recorrer el array con los diferentes objetos
-                                    #Con el fin de encontrar si el objeto actual ya se encuentra en el array
-                                    for j in range(len(objetos)):
-                                          positionRelative = lastPosition[i][-1] 
-                                          objetAArray = np.array(objetos[i][0])
-                                          objetBArray = np.array(objeto)
-                                          #Se calcula la distancia entre el nuevo objeto y cada ultima posicion 
-                                          #de los diferentes obejtos, en caso de ser 1 es el mismo objeto, solo
-                                          #que se movio un pixel
-                                          if dist(positionRelative, position) == 1: 
-                                                #Preguntamos si existe una instancia de lista para agregar los objetos
-                                                if isinstance(objetos[i], list):
-                                                      objetos[i].append(objeto)
-                                                      lastPosition[i].append(position)
-                                                      #Preguntamos si el arreglo move, el que guardara todos los cambios de
-                                                      #movimiento del objeto tiene una instancia de lista para agregar el movimiento.
-                                                      if isinstance(move[i], list):
-                                                            if (positionRelative[0] > position[0]):
-                                                                  move[i].append(3)
-                                                            elif (positionRelative[0] < position[0]):
-                                                                  move[i].append(2)
-                                                            elif (positionRelative[1] > position[1]):
-                                                                  move[i].append(4)
-                                                            elif (positionRelative[1] < position[1]):
-                                                                  move[i].append(1)
-                                                            break
-                                                      else:
-                                                            move.append(list())
-                                                            if (positionRelative[0] > position[0]):
-                                                                  move[i].append(3)
-                                                            elif (positionRelative[0] < position[0]):
-                                                                  move[i].append(2)
-                                                            elif (positionRelative[1] > position[1]):
-                                                                  move[i].append(4)
-                                                            elif (positionRelative[1] < position[1]):
-                                                                  move[i].append(1)
-                                                            break
-                                                else:
-                                                      objetos.append(list())
-                                                      objetos[i].append(objeto)
-                                                      lastPosition.append(list())
-                                                      lastPosition[i].append(position)
-                                                      if (positionRelative[0] > position[0]):
-                                                            move.append(3)
-                                                      elif (positionRelative[0] < position[0]):
-                                                            move.append(2)
-                                                      elif (positionRelative[1] > position[1]):
-                                                            move.append(4)
-                                                      elif (positionRelative[1] < position[1]):
-                                                            move.append(1)
-                                                      break
-                                    objetos.append(list())
-                                    objetos[i].append(objeto)
-                                    lastPosition.append(list())
-                                    lastPosition[i].append(position)
-            videoblob.write(im_with_keypoints)
-            #Aca se muestra frame a frame como va jugando la IA y detectando los diferentes objetos
-            cv2.imshow('dframe', im_with_keypoints)
-      else:
-            cap.release()
-            videoblob.release()
-            break
-      # Mostrar frame que ocupo el metodo de cv2 para la deteccion de objetos 
+      DrawContornos(ret,mask,frame,keypoints,cap,videoblob,objetos,lastPosition,move,im_with_keypoints,dframe)
       cv2.waitKey(10)
 
 #Encontrar la correlacion de las acciones de los diferentes objetos
 #con las acciones cometidas por el agente
-for i in range(0,len(dictionaryAction['Move'])):
-      corr = dictionaryAction['Move'][i]
-      if len(corr) == 0:
-            continue
-      nueva = accionesAgent[0:len(corr)]
-      correlacion = pearsonr(corr, nueva)
-      print(correlacion)
-
-video.release()  
+Correlacion(dictionaryAction,accionesAgent)
 cap.release()
 cv2.destroyAllWindows()
 #Por ultimo se puede observar que hay dos videos, uno de lo que jugo la IA y otro de lo que se detecto a partir de los Blobs.
